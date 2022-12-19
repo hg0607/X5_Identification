@@ -39,67 +39,70 @@ acc3 = gradient(x3)*1000/1.18;
 % Pb_dynamic = [Ia_1; fv_1; fc_1; fo_1;  ...
 %             (l_2x + m_3/4)*g; (l_2y+l_3z)*g; Ia_2; fv_2; fc_2; fo_2;  ...
 %             l_3x*g; l_3y*g; Ia_3; fv_3; fc_3; fo_3 ];
-p_static = 10;
-Hb_static = zeros(n*m,p_static);
-p_dynamic = 16;
-Hb_dynamic = zeros(n*m,p_dynamic);
+
+r = 100;
+p = 16;
+Hb_dynamic = zeros(n*m,p);
 y = zeros(n*m,1);
 q1 = deg2rad(pos1); q2 = deg2rad(pos2+90); q3 = deg2rad(pos3);
-dq1 = x1; dq2 = x2; dq3 = x3;
+dq1 = deg2rad(x1); dq2 = deg2rad(x2); dq3 = deg2rad(x3);
 for i=1:m
-    Hb_static(3*i-2,:) = [tanh(5*dq1(i)), 1,...
-           0, 0, 0, 0,...
-           0, 0, 0, 0];
-       
-	Hb_static(3*i-1,:) = [0, 0,...
-           -cos(q2(i)), sin(q2(i)), tanh(5*dq2(i)),1,...
-           -cos(q2(i))*cos(q3(i)), cos(q2(i))*sin(q3(i)), 0, 0 ];
-
-	Hb_static(3*i,:) = [0, 0,...
-           0, 0, 0, 0,...
-           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), tanh(5*dq3(i)),1 ];
-
-    Hb_dynamic(3*i-2,:) = [acc1(i), dq1(i), tanh(5*dq1(i)), 1,...
+    
+    Hb_dynamic(3*i-2,:) = [acc1(i), dq1(i), tanh(r*dq1(i)), 1,...
            0, 0, 0, 0, 0, 0, ...
            0, 0, 0, 0, 0, 0];
        
 	Hb_dynamic(3*i-1,:) = [0, 0, 0, 0, ...
-           -cos(q2(i)), sin(q2(i)), acc2(i), dq2(i), tanh(5*dq2(i)),1,...
+           -cos(q2(i)), sin(q2(i)), acc2(i), dq2(i), tanh(r*dq2(i)),1,...
            -cos(q2(i))*cos(q3(i)), cos(q2(i))*sin(q3(i)), 0, 0, 0, 0 ];
 
 	Hb_dynamic(3*i,:) = [0, 0, 0, 0, ...
            0, 0, 0, 0, 0, 0, ...
-           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), acc3(i), dq3(i), tanh(5*dq3(i)),1 ];
+           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), acc3(i), dq3(i), tanh(r*dq3(i)),1 ];
        
     y(3*i-2) = y1(i);
     y(3*i-1) = y2(i);
     y(3*i) = y3(i);
 end
-load x_ls_static.mat 
-y_ls_static = Hb_static*x_ls_static;
-cond_Hb_static = cond(Hb_static)
-figure('name','静力学拟合')
-subplot(3,1,1)
-plot(y1,'k')
-hold on
-plot(y_ls_static(1:3:end),'r')
-legend('实际值','拟合值')
-mse1 = mse(y1 - y_ls_static(1:3:end))
-subplot(3,1,2)
-plot(y2,'k')
-hold on
-plot(y_ls_static(2:3:end),'r')
-legend('实际值','拟合值')
-mse2 = mse(y2 - y_ls_static(2:3:end))
-subplot(3,1,3)
-plot(y3,'k')
-hold on
-plot(y_ls_static(3:3:end),'r')
-legend('实际值','拟合值')
-mse3 = mse(y3 - y_ls_static(3:3:end))
 
-cond_Hb_dynamic = cond(Hb_dynamic)
-load x_ls_dynamic.mat 
+omega = eye(3);
+Ystar = zeros(n,p);
+Hbstar = zeros(n*m,p);
+Tstar = zeros(n*m,1);
+for iter = 1:10
+    for i=1:m
+        Ystar(1,:) = [acc1(i), dq1(i), tanh(r*dq1(i)), 1,...
+           0, 0, 0, 0, 0, 0, ...
+           0, 0, 0, 0, 0, 0];
+       
+        Ystar(2,:) = [0, 0, 0, 0, ...
+           -cos(q2(i)), sin(q2(i)), acc2(i), dq2(i), tanh(r*dq2(i)),1,...
+           -cos(q2(i))*cos(q3(i)), cos(q2(i))*sin(q3(i)), 0, 0, 0, 0 ];
+
+        Ystar(3,:) = [0, 0, 0, 0, ...
+           0, 0, 0, 0, 0, 0, ...
+           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), acc3(i), dq3(i), tanh(r*dq3(i)),1 ];
+       
+       
+        Hbstar(3*i-2:3*i,:) = (omega)^(-1/2)*Ystar;
+        Tstar(3*i-2:3*i) = (omega)^(-1/2)*[y1(i); y2(i); y3(i)];
+    end
+    
+    cond(Hbstar);
+    x_ls =(Hbstar'*Hbstar)\Hbstar'*Tstar;
+    x_ls_var = diag(inv(Hbstar'*Hbstar));
+    y_ls = Hbstar*x_ls;
+    R = Tstar - y_ls;
+    norm(R)
+    E(1,:) = R(1:3:end);
+    E(2,:) = R(2:3:end);
+    E(3,:) = R(3:3:end);
+    omega = omega^(1/2)*(E*E')*omega^(1/2)/(m-p);
+
+end
+
+x_ls_dynamic = x_ls;
+save 'x_ls_dynamic.mat' x_ls_dynamic
 % x_ls_var = diag(inv(Hb_dynamic'*Hb_dynamic))
 y_ls_dynamic = Hb_dynamic*x_ls_dynamic;
 figure('name','动力学拟合')

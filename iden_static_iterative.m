@@ -1,4 +1,3 @@
-
 clear
 close all
 format short
@@ -38,32 +37,65 @@ Hb = zeros(n*m,p);
 y = zeros(n*m,1);
 q1 = deg2rad(pos1); q2 = deg2rad(pos2+90); q3 = deg2rad(pos3);
 dq1 = x1; dq2 = x2; dq3 = x3;
-r = 2;
 for i=1:m
-    Hb(3*i-2,:) = [tanh(r*dq1(i)), 1,...
+    Hb(3*i-2,:) = [tanh(5*dq1(i)), 1,...
            0, 0, 0, 0,...
            0, 0, 0, 0];
        
 	Hb(3*i-1,:) = [0, 0,...
-           -cos(q2(i)), sin(q2(i)), tanh(r*dq2(i)), 1,...
+           -cos(q2(i)), sin(q2(i)), tanh(5*dq2(i)), 1,...
            -cos(q2(i))*cos(q3(i)), cos(q2(i))*sin(q3(i)), 0, 0 ];
 
 	Hb(3*i,:) = [0, 0,...
            0, 0, 0, 0,...
-           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), tanh(r*dq3(i)),1 ];
+           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), tanh(5*dq3(i)),1 ];
 
        
     y(3*i-2) = y1(i);
     y(3*i-1) = y2(i);
     y(3*i) = y3(i);
 end
-cond_Hb = cond(Hb)
-x_ls_static =(Hb'*Hb)\Hb'*y
-save 'x_ls_static.mat' x_ls_static
-x_ls_var = diag(inv(Hb'*Hb))
-y_ls = Hb*x_ls_static;
-figure
 
+omega = eye(3);
+Ystar = zeros(n,p);
+Hbstar = zeros(n*m,p);
+Tstar = zeros(n*m,1);
+for iter = 1:10
+    for i=1:m
+        Ystar(1,:) = [tanh(5*dq1(i)), 1,...
+           0, 0, 0, 0,...
+           0, 0, 0, 0];
+       
+        Ystar(2,:) = [0, 0,...
+           -cos(q2(i)), sin(q2(i)), tanh(5*dq2(i)), 1,...
+           -cos(q2(i))*cos(q3(i)), cos(q2(i))*sin(q3(i)), 0, 0 ];
+
+        Ystar(3,:) = [0, 0,...
+           0, 0, 0, 0,...
+           sin(q2(i))*sin(q3(i)), sin(q2(i))*cos(q3(i)), tanh(5*dq3(i)),1 ];
+
+       
+        Hbstar(3*i-2:3*i,:) = (omega)^(-1/2)*Ystar;
+        Tstar(3*i-2:3*i) = (omega)^(-1/2)*[y1(i); y2(i); y3(i)];
+    end
+    
+    cond(Hbstar);
+    x_ls =(Hbstar'*Hbstar)\Hbstar'*Tstar;
+    x_ls_var = diag(inv(Hbstar'*Hbstar));
+    y_ls = Hbstar*x_ls;
+    R = Tstar - y_ls;
+    norm(R)
+    E(1,:) = R(1:3:end);
+    E(2,:) = R(2:3:end);
+    E(3,:) = R(3:3:end);
+    omega = omega^(1/2)*(E*E')*omega^(1/2)/(m-p);
+
+end
+
+y_ls = Hb*x_ls;
+x_ls_static = x_ls;
+save 'x_ls_static.mat' x_ls_static
+figure
 subplot(3,1,1)
 plot(y1,'k')
 hold on
